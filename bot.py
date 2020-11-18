@@ -1,17 +1,85 @@
-import discord, os
+import discord, os, sys
+import youtube_dl
+import math
+import yt_search
+import json
 from discord.ext import commands
 from discord.utils import get
 from asyncio import sleep
-import youtube_dl
-import yt_search
+from valorant_ranks import ranks
+import traceback
+
 
 bot = commands.Bot(command_prefix="!")
 
 
 @bot.event
 async def on_ready():
-    print('We have logged in as {0.user}'.format(bot))
+    print(f'We have logged in as {bot.user}')
 
+@bot.event
+async def on_command_error(ctx, error):
+    # if command has local error handler, return
+    if hasattr(ctx.command, 'on_error'):
+        return
+
+    # get the original exception
+    error = getattr(error, 'original', error)
+
+    if isinstance(error, commands.CommandNotFound):
+        await ctx.send("command not found")
+
+    if isinstance(error, commands.BotMissingPermissions):
+        missing = [perm.replace('_', ' ').replace('guild', 'server').title() for perm in error.missing_perms]
+        if len(missing) > 2:
+            fmt = '{}, and {}'.format("**, **".join(missing[:-1]), missing[-1])
+        else:
+            fmt = ' and '.join(missing)
+        _message = f'I need the **{fmt}** permission(s) to run this command.'
+        await ctx.send(_message)
+
+
+    if isinstance(error, commands.DisabledCommand):
+        await ctx.send('This command has been disabled.')
+
+
+    if isinstance(error, commands.CommandOnCooldown):
+        await ctx.send("This command is on cooldown, please retry in {}s.".format(math.ceil(error.retry_after)))
+
+
+    if isinstance(error, commands.MissingPermissions):
+        missing = [perm.replace('_', ' ').replace('guild', 'server').title() for perm in error.missing_perms]
+        if len(missing) > 2:
+            fmt = '{}, and {}'.format("**, **".join(missing[:-1]), missing[-1])
+        else:
+            fmt = ' and '.join(missing)
+        _message = 'You need the **{}** permission(s) to use this command.'.format(fmt)
+        await ctx.send(_message)
+
+
+    if isinstance(error, commands.UserInputError):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await ctx.send("Missing arguments")
+        else:
+            await ctx.send("Invalid input.")
+
+
+    if isinstance(error, commands.NoPrivateMessage):
+        try:
+            await ctx.author.send('This command cannot be used in direct messages.')
+        except discord.Forbidden:
+            pass
+
+
+    if isinstance(error, commands.CheckFailure):
+        await ctx.send("You do not have permission to use this command.")
+
+
+    await ctx.send("use `!help` for more info on a command")
+    # ignore all other exception types, but print them to stderr
+    print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
+
+    traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
 @bot.command()
 async def join(ctx):
@@ -84,8 +152,58 @@ async def on_message(message):
 
 
 @bot.command()
-async def test(ctx):
-    print('hi')
+async def rank(ctx, name: str):
+    with open('valorant_players.json') as json_file:
+        player_dict = json.load(json_file)
+    if name in player_dict:
+        rank_emoji = discord.utils.get(ctx.guild.emojis, name=player_dict[name]["rank"])
+        await ctx.send(f"***{name}***'s rank is {str(rank_emoji)}")
+    else:
+        await ctx.send("player not found")
+
+@bot.command()
+async def setrank(ctx, name:str, rank:str):
+    if rank not in ranks:
+        await ctx.send("invalid rank!")
+        return
+
+    with open('valorant_players.json') as json_file:
+        player_dict = json.load(json_file)
+    if name in player_dict:
+        player_dict[name]["rank"] = rank
+        with open('valorant_players.json', 'w') as outfile:
+            json.dump(player_dict, outfile)
+        rank_emoji = discord.utils.get(ctx.guild.emojis, name=rank)
+        await ctx.send(f"***{name}***'s rank is set to {str(rank_emoji)}")
+    else:
+        await ctx.send(f"***{name}***  is not found in the database. \n"
+                       f"please use `!add_valoplayer` to add this player to the db")
+    # except:
+    #     print("could not open db file")
+    #     await ctx.send("database service error")
+
+@bot.command()
+async def add_valoplayer(ctx, name:str, rank:str):
+    if rank not in ranks:
+        await ctx.send("please enter a valid rank! \n "
+                 "example of valid ranks: \n"
+                 "diamond3, silver2, immortal1, radiant, etc..")
+        return
+    try:
+        with open('valorant_players.json') as json_file:
+            player_dict = json.load(json_file)
+            if name not in player_dict:
+                player_dict[name] = {"rank": rank}
+                with open('valorant_players.json', 'w') as outfile:
+                    json.dump(player_dict, outfile)
+                rank_emoji = discord.utils.get(ctx.guild.emojis, name=rank)
+                await ctx.send(name + "'s rank is set to " + str(rank_emoji))
+            else:
+                await ctx.send(name + " already exists the database!")
+    except:
+        print("could not open db file")
+        await ctx.send("database service error")
+
 
 @bot.command()
 async def play(ctx, *args):
