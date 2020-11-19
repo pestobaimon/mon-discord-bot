@@ -22,7 +22,7 @@ class Music:
         self.url = url
         self.title = title
         self.queue_embed = discord.Embed(title=title, url=self.url, color=0x00ccff)
-        self.queue_embed.set_author(name="Enqueued")
+        self.queue_embed.set_author(name="Queued")
         self.playing_embed = discord.Embed(title=title, url=self.url,
                                            color=0x00ccff)
         self.playing_embed.set_author(name="Now Playing")
@@ -35,12 +35,12 @@ class PlayState(Enum):
     stopped = 0
     playing = 1
     pausing = 2
+    notplaying = 3
 
 
 class Player:
     def __init__(self):
-        self.is_queueing = False
-        self.play_state = PlayState.stopped
+        self.play_state = PlayState.notplaying
         self.music_playing = None
         self.check_queue = True
 
@@ -163,14 +163,12 @@ async def join(ctx):
     if voice and voice.is_connected():
         voice.move_to(channel)
         music_queues[ctx.guild.id] = []
-        players[ctx.guild.id].is_queueing = False
-        players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].play_state = PlayState.notplaying
         players[ctx.guild.id].music_playing = None
     else:
         await channel.connect()
         music_queues[ctx.guild.id] = []
-        players[ctx.guild.id].is_queueing = False
-        players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].play_state = PlayState.notplaying
         players[ctx.guild.id].music_playing = None
 
 
@@ -229,8 +227,7 @@ async def leave(ctx):
     if voice and voice.is_connected():
         await ctx.send("bye bye, you use me like a fucking slave and then throw me away like this huh")
         music_queues[ctx.guild.id] = []
-        players[ctx.guild.id].is_queueing = False
-        players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].play_state = PlayState.notplaying
         players[ctx.guild.id].music_playing = None
         await voice.disconnect()
     else:
@@ -455,7 +452,7 @@ async def derank(ctx):
                            f"please use `!addvalo` to add yourself to the database.")
 
 
-@bot.command()
+@bot.command(aliases=['paly','pley','pely'])
 async def play(ctx, *args):
     global music_queues, players, i
 
@@ -465,7 +462,17 @@ async def play(ctx, *args):
         await ctx.send("you're not in a voice channel, stoopid human")
         return
     key_in = " ".join(args[:])
-
+    if key_in == '':
+        playstate = players[ctx.guild.id].play_state
+        if playstate == PlayState.pausing:
+            await resume(ctx)
+        elif playstate == PlayState.stopped:
+            if len(music_queues[ctx.guild.id]) > 0:
+                voice = get(bot.voice_clients, guild=ctx.guild)
+                await check_queue(ctx, voice, None)
+            else:
+                await ctx.send("no music playing!")
+        return
     voice = get(bot.voice_clients, guild=ctx.guild)
     if ctx.guild.id not in players:
         players[ctx.guild.id] = Player()
@@ -489,13 +496,12 @@ async def play(ctx, *args):
 
     if ctx.guild.id not in music_queues:
         music_queues[ctx.guild.id] = []
-    elif players[ctx.guild.id].is_queueing:
+    elif players[ctx.guild.id].music_playing:
         music_queues[ctx.guild.id].append(music)
 
     print('enqueued song')
 
-    if not players[ctx.guild.id].is_queueing:
-        players[ctx.guild.id].is_queueing = True
+    if not players[ctx.guild.id].music_playing:
         await play_music(ctx, music)
     else:
         music.message = await ctx.send(embed=music.queue_embed)
@@ -521,7 +527,7 @@ async def play_music(ctx, music: Music):
 
 async def check_queue(ctx, voice, prev_play_msg=None):
     global music_queues
-    if players[ctx.guild.id].check_queue:
+    if players[ctx.guild.id].music_playing:
         if music_queues[ctx.guild.id]:
             print(music_queues[ctx.guild.id])
             music: Music = music_queues[ctx.guild.id].pop(0)
@@ -541,7 +547,7 @@ async def check_queue(ctx, voice, prev_play_msg=None):
                 voice.stop()
             music_queues[ctx.guild.id] = []
             players[ctx.guild.id].is_queueing = False
-            players[ctx.guild.id].play_state = PlayState.stopped
+            players[ctx.guild.id].play_state = PlayState.notplaying
             players[ctx.guild.id].music_playing = None
     else:
         players[ctx.guild.id].check_queue = True
@@ -549,39 +555,44 @@ async def check_queue(ctx, voice, prev_play_msg=None):
 
 
 @bot.command()
-async def skip(ctx):
+async def skip(ctx, msg=True):
     global music_queues, players
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice:
         if voice.is_playing():
             await stop(ctx, msg=False)
-        if players[ctx.guild.id].is_queueing:
+        if players[ctx.guild.id].music_playing:
             await check_queue(ctx, voice, players[ctx.guild.id].music_playing.message)
-            await ctx.send("music skipped")
+            if msg:
+                await ctx.message.add_reaction("👌")
         else:
             await ctx.send("Nothing in queue")
 
 
 @bot.command()
-async def pause(ctx):
+async def pause(ctx, msg=True):
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice and voice.is_playing():
         voice.pause()
         players[ctx.guild.id].play_state = PlayState.pausing
-        await ctx.send("music paused")
+        if msg:
+            emoji = bot.get_emoji('c76aff0be5af2818d6a54a7041f42a11')
+            await ctx.message.add_reaction("⏸")
     else:
         await ctx.send("music is not playing")
 
 
 @bot.command()
-async def resume(ctx):
+async def resume(ctx, msg=True):
     voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice and voice.is_paused():
+    playstate = players[ctx.guild.id].play_state
+    if voice and playstate == PlayState.pausing:
         voice.resume()
         players[ctx.guild.id].play_state = PlayState.playing
-        await ctx.send("music resumed")
+        if msg:
+            await ctx.message.add_reaction("▶")
     else:
-        await ctx.send("music is not paused")
+        await ctx.send("music is not playing")
 
 
 @bot.command()
@@ -591,8 +602,9 @@ async def stop(ctx, msg=True):
     if voice and voice.is_playing():
         voice.stop()
         players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].music_playing = None
         if msg:
-            await ctx.send("music stopped")
+            await ctx.message.add_reaction("🛑")
     else:
         await ctx.send("music is not playing")
 
@@ -602,7 +614,12 @@ async def volume(ctx, vol:int):
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice:
         if 0 <= vol <= 100:
+            if vol / 100 > voice.source.volume:
+                emoji = "🔊"
+            else:
+                emoji = "🔉"
             voice.source.volume = vol / 100
+            await ctx.message.add_reaction(emoji)
             await ctx.send(f"current volume is {vol}")
         else:
             await ctx.send("enter a volume between 0 and 100")
