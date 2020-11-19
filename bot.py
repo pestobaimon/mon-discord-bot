@@ -4,6 +4,9 @@ import math
 import sys
 import threading
 import traceback
+import ctypes
+import ctypes.util
+from secret_token import TOKEN
 from enum import Enum
 from typing import Dict, List
 import discord
@@ -637,4 +640,4 @@ async def queue(ctx):
         await ctx.send(msg)
 
 
-bot.run('Nzc4NDcwOTUzMTA4ODk3ODQz.X7Sdkg.F4SGZrC_UKtSMsrOjxFieKnSBsI')
+bot.run(TOKEN)
