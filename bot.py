@@ -419,7 +419,7 @@ async def play(ctx, *args):
 
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': '/Users/katsumonn/PycharmProjects/MonBot/songs/%(title)s.%(ext)s',
+        'outtmpl': './songs/%(title)s.%(ext)s',
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -430,9 +430,7 @@ async def play(ctx, *args):
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         print("downloading audio\n")
         ydl.download([url])
-    print(os.listdir(song_path))
     for file in os.listdir(song_path):
-        print('here')
         if file.endswith(".mp3"):
             os.rename(song_path + file, song_path + "song.mp3")
             print("renamed")
