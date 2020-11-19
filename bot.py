@@ -1,22 +1,54 @@
+import asyncio
 import json
 import math
-import os
 import sys
+import threading
 import traceback
-from asyncio import sleep
-
+from enum import Enum
+from typing import Dict, List
 import discord
-import youtube_dl
-import yt_search
 from discord.ext import commands
 from discord.utils import get
+from youtube_dl import YoutubeDL
+from youtubesearchpython import SearchVideos
 
 from valorant_ranks import Rank
 
 bot = commands.Bot(command_prefix="!", help_command=None)
 
-music_queue = []
-song_path = "./songs/"
+
+class Music:
+    def __init__(self, url: str, title: str, event, queue_number):
+        self.url = url
+        self.title = title
+        self.queue_embed = discord.Embed(title=title, url=self.url, color=0x00ccff)
+        self.queue_embed.set_author(name="Enqueued")
+        self.playing_embed = discord.Embed(title=title, url=self.url,
+                                           color=0x00ccff)
+        self.playing_embed.set_author(name="Now Playing")
+        self.event = event
+        self.id = queue_number
+        self.message = None
+
+
+class PlayState(Enum):
+    stopped = 0
+    playing = 1
+    pausing = 2
+
+
+class Player:
+    def __init__(self):
+        self.is_queueing = False
+        self.play_state = PlayState.stopped
+        self.music_playing = None
+        self.check_queue = True
+
+
+music_queues: Dict[int, List[Music]] = {}
+players: Dict[int, Player] = {}
+YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
+FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
 
 
 @bot.event
@@ -86,7 +118,11 @@ async def help(ctx, args=None):
     if not args:
         await ctx.send("```"
                        "general commands:\n"
-                       "    play [song name or YT url]      #plays songs on youtube\n"
+                       "    play [song name or YT url]      #plays music on youtube. enqueues new music.\n"
+                       "    skip                            #skips the current music\n"
+                       "    pause                           #pauses the current music\n"
+                       "    stop                            #stops the current music\n"
+                       "    queue                           #lists the music currently in queue\n"
                        "    join                            #makes monbot join the voice channel\n"
                        "    leave                           #makes monbot leave the channel\n"
                        "    whatsup                         #monbot is cranky, try not to disturb it\n"
@@ -126,8 +162,16 @@ async def join(ctx):
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice and voice.is_connected():
         voice.move_to(channel)
+        music_queues[ctx.guild.id] = []
+        players[ctx.guild.id].is_queueing = False
+        players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].music_playing = None
     else:
         await channel.connect()
+        music_queues[ctx.guild.id] = []
+        players[ctx.guild.id].is_queueing = False
+        players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].music_playing = None
 
 
 @bot.command(pass_context=True, aliases=['aggro', 'hello'])
@@ -149,7 +193,7 @@ async def whatsup(ctx):
     voice.play(source, after=lambda e: print('done playing FUCK OFF'))
 
     while voice.is_playing():
-        await sleep(1)
+        await asyncio.sleep(1)
     await voice.disconnect()
 
 
@@ -175,7 +219,7 @@ async def sadboi(ctx):
     voice.play(source, after=lambda e: print('done playing SAD VIOLIN'))
 
     while voice.is_playing():
-        await sleep(1)
+        await asyncio.sleep(1)
     await voice.disconnect()
 
 
@@ -184,6 +228,10 @@ async def leave(ctx):
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice and voice.is_connected():
         await ctx.send("bye bye, you use me like a fucking slave and then throw me away like this huh")
+        music_queues[ctx.guild.id] = []
+        players[ctx.guild.id].is_queueing = False
+        players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].music_playing = None
         await voice.disconnect()
     else:
         await ctx.send("I'm not in a voice channel, dumbass")
@@ -274,7 +322,6 @@ async def setname(ctx, name: str = None):
             player_dict[authid]["name"] = name
             with open('valorant_players.json', 'w') as outfile:
                 json.dump(player_dict, outfile)
-            rank_emoji = discord.utils.get(ctx.guild.emojis, name=Rank(player_dict[authid]["rank"]).name)
             await ctx.send(f"{ctx.author.mention}'s valorant name is set to ***{name}***")
         else:
             await ctx.send(f"{ctx.author.mention} is not found in the database. \n"
@@ -410,7 +457,8 @@ async def derank(ctx):
 
 @bot.command()
 async def play(ctx, *args):
-    global music_queue
+    global music_queues, players, i
+
     author = ctx.message.author
     channel = author.voice.channel
     if not channel:
@@ -418,87 +466,158 @@ async def play(ctx, *args):
         return
     key_in = " ".join(args[:])
 
-    song_exists = os.path.isfile(song_path + "song.mp3")
-    try:
-        if song_exists:
-            os.remove(song_path + "song.mp3")
-    except PermissionError:
-        print("Song is playing. Can't delete")
-        return
-
     voice = get(bot.voice_clients, guild=ctx.guild)
+    if ctx.guild.id not in players:
+        players[ctx.guild.id] = Player()
     if voice:
         same_channel = (channel == voice.channel)
-        voice.stop()
     else:
         same_channel = False
     if not same_channel:
-        music_queue = []
+        music_queues[ctx.guild.id] = []
+        players[ctx.guild.id] = Player()
         if voice and voice.is_connected():
             voice.move_to(channel)
         else:
             await channel.connect()
 
-    if key_in.startswith("https://www.youtube.com/") or key_in.startswith("www.youtube.com"):
-        url = key_in
+    search = SearchVideos(key_in, offset=1, mode="dict", max_results=1)
+    search_result = search.result()['search_result']
+    url = search_result[0]['link']
+    title = search_result[0]['title']
+    music = Music(url, title, threading.Event(), 0)
+
+    if ctx.guild.id not in music_queues:
+        music_queues[ctx.guild.id] = []
+    elif players[ctx.guild.id].is_queueing:
+        music_queues[ctx.guild.id].append(music)
+
+    print('enqueued song')
+
+    if not players[ctx.guild.id].is_queueing:
+        players[ctx.guild.id].is_queueing = True
+        await play_music(ctx, music)
     else:
-        yt = yt_search.build("AIzaSyCyhMTYRkOV9-vTkeXfMPqBqE70EE52zR0")
-        search_result = yt.search(key_in, sMax=10, sType=["video"])
-        url = 'https://www.youtube.com/watch?v=' + search_result.videoId[0]
-    music_queue.append(url)
-    if not voice or not(voice.is_playing() or voice.is_paused()):
-        await play_music(ctx)
+        music.message = await ctx.send(embed=music.queue_embed)
 
 
-async def play_music(ctx):
-    global music_queue
-
-    url = music_queue.pop(0)
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': '/Users/katsumonn/PycharmProjects/MonBot/songs/%(title)s.%(ext)s',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-    }
-    await ctx.send('playing ' + url)
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        print("downloading audio\n")
-        ydl.download([url])
-
-    for file in os.listdir(song_path):
-        if file.endswith(".mp3"):
-            os.rename(song_path + file, song_path + "song.mp3")
-            print("renamed")
-    source = discord.FFmpegPCMAudio(source='songs/song.mp3', executable="C:\\ffmpeg\\bin\\ffmpeg.exe")
+async def play_music(ctx, music: Music):
     voice = get(bot.voice_clients, guild=ctx.guild)
-    voice.play(source, after=lambda e: play(ctx))
+
+    if not voice.is_playing():
+        with YoutubeDL(YDL_OPTIONS) as ydl:
+            info = ydl.extract_info(music.url, download=False)
+        url = info['formats'][0]['url']
+        music.message = await ctx.send(embed=music.playing_embed)
+        voice.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS),
+                   after=lambda e: asyncio.run_coroutine_threadsafe(check_queue(ctx, voice, music.message), bot.loop))
+        voice.source = discord.PCMVolumeTransformer(voice.source, volume=1.0)
+        players[ctx.guild.id].music_playing = music
+        voice.is_playing()
+    else:
+        await ctx.send("Already playing song")
+        return
+
+
+async def check_queue(ctx, voice, prev_play_msg=None):
+    global music_queues
+    if players[ctx.guild.id].check_queue:
+        if music_queues[ctx.guild.id]:
+            print(music_queues[ctx.guild.id])
+            music: Music = music_queues[ctx.guild.id].pop(0)
+            if prev_play_msg:
+                await prev_play_msg.delete()
+            await music.message.delete()
+            with YoutubeDL(YDL_OPTIONS) as ydl:
+                info = ydl.extract_info(music.url, download=False)
+            url = info['formats'][0]['url']
+            music.message = await ctx.send(embed=music.playing_embed)
+            players[ctx.guild.id].music_playing = music
+            voice.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS),
+                       after=lambda e: asyncio.run_coroutine_threadsafe(check_queue(ctx, voice, music.message), bot.loop))
+            return
+        else:
+            if voice.is_playing:
+                voice.stop()
+            music_queues[ctx.guild.id] = []
+            players[ctx.guild.id].is_queueing = False
+            players[ctx.guild.id].play_state = PlayState.stopped
+            players[ctx.guild.id].music_playing = None
+    else:
+        players[ctx.guild.id].check_queue = True
+
+
+
+@bot.command()
+async def skip(ctx):
+    global music_queues, players
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice:
+        if voice.is_playing():
+            await stop(ctx, msg=False)
+        if players[ctx.guild.id].is_queueing:
+            await check_queue(ctx, voice, players[ctx.guild.id].music_playing.message)
+            await ctx.send("music skipped")
+        else:
+            await ctx.send("Nothing in queue")
 
 
 @bot.command()
 async def pause(ctx):
     voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice.is_playing():
+    if voice and voice.is_playing():
         voice.pause()
-        await ctx.send("audio paused")
+        players[ctx.guild.id].play_state = PlayState.pausing
+        await ctx.send("music paused")
+    else:
+        await ctx.send("music is not playing")
 
 
 @bot.command()
 async def resume(ctx):
     voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice.is_playing():
+    if voice and voice.is_paused():
         voice.resume()
-        await ctx.send("audio resumed")
+        players[ctx.guild.id].play_state = PlayState.playing
+        await ctx.send("music resumed")
+    else:
+        await ctx.send("music is not paused")
 
 
 @bot.command()
-async def stop(ctx):
+async def stop(ctx, msg=True):
     voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice.is_playing() or voice.is_paused():
+    players[ctx.guild.id].check_queue = False
+    if voice and voice.is_playing():
         voice.stop()
-        await ctx.send("audio stopped")
+        players[ctx.guild.id].play_state = PlayState.stopped
+        if msg:
+            await ctx.send("music stopped")
+    else:
+        await ctx.send("music is not playing")
+
+
+@bot.command(aliases=['v','vol'])
+async def volume(ctx, vol:int):
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice:
+        if 0 <= vol <= 100:
+            voice.source.volume = vol / 100
+            await ctx.send(f"current volume is {vol}")
+        else:
+            await ctx.send("enter a volume between 0 and 100")
+
+
+@bot.command(aliases=['q', 'que'])
+async def queue(ctx):
+    if not music_queues[ctx.guild.id]:
+        await ctx.send("The music queue is currently empty")
+    else:
+        msg = ""
+        for music in music_queues[ctx.guild.id]:
+            msg += music.title + "\n"
+        msg = "```"+msg[:-2]+"```"
+        await ctx.send(msg)
 
 
 bot.run('Nzc4NDcwOTUzMTA4ODk3ODQz.X7Sdkg.F4SGZrC_UKtSMsrOjxFieKnSBsI')
