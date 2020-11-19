@@ -1,11 +1,11 @@
 import json
 import math
+import os
+import sys
 import traceback
 from asyncio import sleep
 
 import discord
-import os
-import sys
 import youtube_dl
 import yt_search
 from discord.ext import commands
@@ -14,6 +14,9 @@ from discord.utils import get
 from valorant_ranks import Rank
 
 bot = commands.Bot(command_prefix="!", help_command=None)
+
+music_queue = []
+song_path = "./songs/"
 
 
 @bot.event
@@ -117,6 +120,9 @@ async def help(ctx, args=None):
 async def join(ctx):
     author = ctx.message.author
     channel = author.voice.channel
+    if not channel:
+        await ctx.send("you're not in a voice channel, stoopid human")
+        return
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice and voice.is_connected():
         voice.move_to(channel)
@@ -128,14 +134,18 @@ async def join(ctx):
 async def whatsup(ctx):
     author = ctx.message.author
     channel = author.voice.channel
+    if not channel:
+        await ctx.send("you're not in a voice channel, stoopid human")
+        return
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice and voice.is_connected():
         voice.move_to(channel)
     else:
         await channel.connect()
-
     source = discord.FFmpegPCMAudio(source='./effects/fuckoff.mp3', executable="C:\\ffmpeg\\bin\\ffmpeg.exe")
     voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice.is_playing():
+        voice.stop()
     voice.play(source, after=lambda e: print('done playing FUCK OFF'))
 
     while voice.is_playing():
@@ -147,6 +157,9 @@ async def whatsup(ctx):
 async def sadboi(ctx):
     author = ctx.message.author
     channel = author.voice.channel
+    if not channel:
+        await ctx.send("you're not in a voice channel, stoopid human")
+        return
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice and voice.is_connected():
         voice.move_to(channel)
@@ -155,6 +168,10 @@ async def sadboi(ctx):
     source = discord.FFmpegPCMAudio(source='./effects/sadviolin.mp3')
 
     voice = get(bot.voice_clients, guild=ctx.guild)
+
+    if voice.is_playing():
+        voice.stop()
+
     voice.play(source, after=lambda e: print('done playing SAD VIOLIN'))
 
     while voice.is_playing():
@@ -187,7 +204,7 @@ async def on_message(message):
 async def rank(ctx, name: str = None):
     with open('valorant_players.json') as json_file:
         player_dict = json.load(json_file)
-    if name and name[0:2]=="<@" and name[-1]==">":
+    if name and name[0:2] == "<@" and name[-1] == ">":
         authid = name[3:-1]
         print(name)
         if authid in player_dict:
@@ -348,6 +365,7 @@ async def removevalo(ctx, user: str = None):
             else:
                 await ctx.send(f"{ctx.author.mention} doesn't exist in the database")
 
+
 @bot.command()
 async def rankup(ctx):
     with open('valorant_players.json') as json_file:
@@ -392,10 +410,14 @@ async def derank(ctx):
 
 @bot.command()
 async def play(ctx, *args):
+    global music_queue
     author = ctx.message.author
     channel = author.voice.channel
+    if not channel:
+        await ctx.send("you're not in a voice channel, stoopid human")
+        return
     key_in = " ".join(args[:])
-    song_path = "./songs/"
+
     song_exists = os.path.isfile(song_path + "song.mp3")
     try:
         if song_exists:
@@ -405,10 +427,17 @@ async def play(ctx, *args):
         return
 
     voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice and voice.is_connected():
-        voice.move_to(channel)
+    if voice:
+        same_channel = (channel == voice.channel)
+        voice.stop()
     else:
-        await channel.connect()
+        same_channel = False
+    if not same_channel:
+        music_queue = []
+        if voice and voice.is_connected():
+            voice.move_to(channel)
+        else:
+            await channel.connect()
 
     if key_in.startswith("https://www.youtube.com/") or key_in.startswith("www.youtube.com"):
         url = key_in
@@ -416,7 +445,15 @@ async def play(ctx, *args):
         yt = yt_search.build("AIzaSyCyhMTYRkOV9-vTkeXfMPqBqE70EE52zR0")
         search_result = yt.search(key_in, sMax=10, sType=["video"])
         url = 'https://www.youtube.com/watch?v=' + search_result.videoId[0]
+    music_queue.append(url)
+    if not voice or not(voice.is_playing() or voice.is_paused()):
+        await play_music(ctx)
 
+
+async def play_music(ctx):
+    global music_queue
+
+    url = music_queue.pop(0)
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': '/Users/katsumonn/PycharmProjects/MonBot/songs/%(title)s.%(ext)s',
@@ -435,9 +472,33 @@ async def play(ctx, *args):
         if file.endswith(".mp3"):
             os.rename(song_path + file, song_path + "song.mp3")
             print("renamed")
-    source = discord.FFmpegPCMAudio(source='songs/song.mp3')
+    source = discord.FFmpegPCMAudio(source='songs/song.mp3', executable="C:\\ffmpeg\\bin\\ffmpeg.exe")
     voice = get(bot.voice_clients, guild=ctx.guild)
-    voice.play(source, after=lambda e: print('done playing yt song'))
+    voice.play(source, after=lambda e: play(ctx))
+
+
+@bot.command()
+async def pause(ctx):
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice.is_playing():
+        voice.pause()
+        await ctx.send("audio paused")
+
+
+@bot.command()
+async def resume(ctx):
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice.is_playing():
+        voice.resume()
+        await ctx.send("audio resumed")
+
+
+@bot.command()
+async def stop(ctx):
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice.is_playing() or voice.is_paused():
+        voice.stop()
+        await ctx.send("audio stopped")
 
 
 bot.run('Nzc4NDcwOTUzMTA4ODk3ODQz.X7Sdkg.F4SGZrC_UKtSMsrOjxFieKnSBsI')
