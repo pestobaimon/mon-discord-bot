@@ -4,17 +4,16 @@ import math
 import sys
 import threading
 import traceback
-import ctypes
-import ctypes.util
-from secret_token import TOKEN
 from enum import Enum
 from typing import Dict, List
+
 import discord
 from discord.ext import commands
 from discord.utils import get
 from youtube_dl import YoutubeDL
 from youtubesearchpython import SearchVideos
 
+from secret_token import TOKEN
 from valorant_ranks import Rank
 
 bot = commands.Bot(command_prefix="!", help_command=None)
@@ -128,8 +127,10 @@ async def help(ctx, args=None):
                        "    queue                           #lists the music currently in queue\n"
                        "    join                            #makes monbot join the voice channel\n"
                        "    leave                           #makes monbot leave the channel\n"
-                       "    whatsup                         #monbot is cranky, try not to disturb it\n"
+                       "    whatsup                         #monbot is cranky, try not to disturb him\n"
                        "    sadboi                          #a command for sad bois\n"
+                       "    ping                            #pings monbot to check if he's alive\n"
+                       "    whyyougay                       #a command for gays\n"
                        "valorant commands:\n"
                        "    addvalo [in-game name] [rank]   #adds your valorant info to bot's database. use !help addvalo for more info\n"
                        "    rank @[name]                    #gets rank. leave @[name] empty to get your own rank\n"
@@ -137,6 +138,7 @@ async def help(ctx, args=None):
                        "    derank                          #decreases your rank by 1\n"
                        "    setname [name]                  #set your valorant name\n"
                        "```")
+        return
     else:
         if args == "addvalo":
             await ctx.send("```"
@@ -153,6 +155,7 @@ async def help(ctx, args=None):
                            "```")
         else:
             await ctx.send("command not found")
+        return
 
 
 @bot.command()
@@ -175,7 +178,7 @@ async def join(ctx):
         players[ctx.guild.id].music_playing = None
 
 
-@bot.command(pass_context=True, aliases=['aggro', 'hello'])
+@bot.command(pass_context=True, aliases=['aggro', 'hello', 'sup', 'whatup'])
 async def whatsup(ctx):
     author = ctx.message.author
     channel = author.voice.channel
@@ -196,6 +199,11 @@ async def whatsup(ctx):
     while voice.is_playing():
         await asyncio.sleep(1)
     await voice.disconnect()
+
+
+@bot.command()
+async def ping(ctx):
+    await ctx.send("***PONG***  mother fucker,  ***PONG***")
 
 
 @bot.command(pass_context=True, aliases=['cry', 'sob', 'nogf'])
@@ -241,10 +249,12 @@ async def leave(ctx):
 async def on_message(message):
     if message.author == bot.user:
         return
-
-    if message.content.startswith('hello bot'):
-        await message.channel.send('Hi baby!')
-
+    # if message.content.startswith('hello bot'):
+    #     await message.channel.send('Hi baby!')
+    if message.guild.id not in players:
+        players[message.guild.id] = Player()
+    if message.guild.id not in music_queues:
+        music_queues[message.guild.id] = []
     await bot.process_commands(message)
 
 
@@ -455,7 +465,7 @@ async def derank(ctx):
                            f"please use `!addvalo` to add yourself to the database.")
 
 
-@bot.command(aliases=['paly','pley','pely'])
+@bot.command(aliases=['paly', 'pley', 'pely'])
 async def play(ctx, *args):
     global music_queues, players, i
 
@@ -543,7 +553,8 @@ async def check_queue(ctx, voice, prev_play_msg=None):
             music.message = await ctx.send(embed=music.playing_embed)
             players[ctx.guild.id].music_playing = music
             voice.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS),
-                       after=lambda e: asyncio.run_coroutine_threadsafe(check_queue(ctx, voice, music.message), bot.loop))
+                       after=lambda e: asyncio.run_coroutine_threadsafe(check_queue(ctx, voice, music.message),
+                                                                        bot.loop))
             return
         else:
             if voice.is_playing:
@@ -554,7 +565,6 @@ async def check_queue(ctx, voice, prev_play_msg=None):
             players[ctx.guild.id].music_playing = None
     else:
         players[ctx.guild.id].check_queue = True
-
 
 
 @bot.command()
@@ -612,8 +622,8 @@ async def stop(ctx, msg=True):
         await ctx.send("music is not playing")
 
 
-@bot.command(aliases=['v','vol'])
-async def volume(ctx, vol:int):
+@bot.command(aliases=['v', 'vol'])
+async def volume(ctx, vol: int):
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice:
         if 0 <= vol <= 100:
@@ -636,7 +646,7 @@ async def queue(ctx):
         msg = ""
         for music in music_queues[ctx.guild.id]:
             msg += music.title + "\n"
-        msg = "```"+msg[:-2]+"```"
+        msg = "```" + msg[:-2] + "```"
         await ctx.send(msg)
 
 
