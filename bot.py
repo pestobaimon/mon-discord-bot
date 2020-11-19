@@ -187,7 +187,7 @@ async def whatsup(ctx):
         voice.move_to(channel)
     else:
         await channel.connect()
-    source = discord.FFmpegPCMAudio(source='./effects/fuckoff.mp3', executable="C:\\ffmpeg\\bin\\ffmpeg.exe")
+    source = discord.FFmpegPCMAudio(source='./effects/fuckoff.mp3')
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice.is_playing():
         voice.stop()
