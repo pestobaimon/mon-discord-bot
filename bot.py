@@ -237,7 +237,7 @@ async def leave(ctx):
     if voice and voice.is_connected():
         await ctx.send("bye bye, you use me like a fucking slave and then throw me away like this huh")
         players[ctx.guild.id].music_queue = []
-        players[ctx.guild.id].play_state = PlayState.notplaying
+        players[ctx.guild.id].play_state = PlayState.stopped
         players[ctx.guild.id].music_playing = None
         await voice.disconnect()
     else:
