@@ -34,7 +34,7 @@ class Music:
         self.playing_embed = discord.Embed(title=title, url=self.url,
                                            color=0x00ccff)
         self.playing_embed.set_author(name="Now Playing")
-        self.message: discord.Embed = None
+        self.message: discord.Message = None
 
 
 class PlayState(Enum):
@@ -298,7 +298,7 @@ async def sadboi(ctx):
 
     voice = get(bot.voice_clients, guild=ctx.guild)
 
-    if player.current_music and player.player != PlayState.stopped:
+    if player.current_music and player.play_state != PlayState.stopped:
         await stop(ctx)
 
     voice.play(source, after=lambda e: print('done playing SAD VIOLIN'))
@@ -552,7 +552,6 @@ async def play(ctx, *args):
                 else:
                     await ctx.send("music is not playing")
                     return
-                return
             elif play_state == PlayState.playing:
                 await ctx.send("Music is already playing!")
                 return
@@ -606,7 +605,7 @@ async def check_queue(ctx, voice, prev_play_msg=None):
         if player.play_state == PlayState.stopped:
             return
         else:
-            player.play_state == PlayState.stopped
+            player.play_state = PlayState.stopped
 
             # delete ended song message
             if prev_play_msg:
