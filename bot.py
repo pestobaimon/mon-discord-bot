@@ -44,7 +44,6 @@ class Player:
     def __init__(self):
         self.play_state = PlayState.notplaying
         self.music_playing = None
-        self.check_queue = True
 
 
 music_queues: Dict[int, List[Music]] = {}
@@ -481,24 +480,19 @@ async def play(ctx, *args):
         elif playstate == PlayState.stopped:
             if len(music_queues[ctx.guild.id]) > 0:
                 voice = get(bot.voice_clients, guild=ctx.guild)
+                players[ctx.guild.id].play_state = PlayState.playing
                 await check_queue(ctx, voice, None)
+                print("next song")
             else:
                 await ctx.send("no music playing!")
         return
     voice = get(bot.voice_clients, guild=ctx.guild)
-    if ctx.guild.id not in players:
-        players[ctx.guild.id] = Player()
     if voice:
         same_channel = (channel == voice.channel)
     else:
         same_channel = False
     if not same_channel:
-        music_queues[ctx.guild.id] = []
-        players[ctx.guild.id] = Player()
-        if voice and voice.is_connected():
-            voice.move_to(channel)
-        else:
-            await channel.connect()
+        await join(ctx)
 
     search = SearchVideos(key_in, offset=1, mode="dict", max_results=1)
     search_result = search.result()['search_result']
@@ -527,21 +521,24 @@ async def play_music(ctx, music: Music):
             info = ydl.extract_info(music.url, download=False)
         url = info['formats'][0]['url']
         music.message = await ctx.send(embed=music.playing_embed)
+        players[ctx.guild.id].music_playing = music
         voice.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS),
                    after=lambda e: asyncio.run_coroutine_threadsafe(check_queue(ctx, voice, music.message), bot.loop))
         voice.source = discord.PCMVolumeTransformer(voice.source, volume=1.0)
-        players[ctx.guild.id].music_playing = music
         voice.is_playing()
     else:
         await ctx.send("Already playing song")
         return
-
+    print(players[ctx.guild.id].music_playing)
 
 async def check_queue(ctx, voice, prev_play_msg=None):
     global music_queues
+    if players[ctx.guild.id].play_state == PlayState.stopped:
+        return
     if players[ctx.guild.id].music_playing:
         if music_queues[ctx.guild.id]:
-            print(music_queues[ctx.guild.id])
+            if voice.is_playing():
+                await stop(ctx, msg=False)
             music: Music = music_queues[ctx.guild.id].pop(0)
             if prev_play_msg:
                 await prev_play_msg.delete()
@@ -558,12 +555,12 @@ async def check_queue(ctx, voice, prev_play_msg=None):
         else:
             if voice.is_playing:
                 voice.stop()
+            if prev_play_msg:
+                await prev_play_msg.delete()
             music_queues[ctx.guild.id] = []
             players[ctx.guild.id].is_queueing = False
             players[ctx.guild.id].play_state = PlayState.notplaying
             players[ctx.guild.id].music_playing = None
-    else:
-        players[ctx.guild.id].check_queue = True
 
 
 @bot.command()
@@ -571,8 +568,6 @@ async def skip(ctx, msg=True):
     global music_queues, players
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice:
-        if voice.is_playing():
-            await stop(ctx, msg=False)
         if players[ctx.guild.id].music_playing:
             await check_queue(ctx, voice, players[ctx.guild.id].music_playing.message)
             if msg:
@@ -610,11 +605,9 @@ async def resume(ctx, msg=True):
 @bot.command()
 async def stop(ctx, msg=True):
     voice = get(bot.voice_clients, guild=ctx.guild)
-    players[ctx.guild.id].check_queue = False
     if voice and voice.is_playing():
         voice.stop()
         players[ctx.guild.id].play_state = PlayState.stopped
-        players[ctx.guild.id].music_playing = None
         if msg:
             await ctx.message.add_reaction("🛑")
     else:
@@ -650,3 +643,4 @@ async def queue(ctx):
 
 
 bot.run(TOKEN)
+
