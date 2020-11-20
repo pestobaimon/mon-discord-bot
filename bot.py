@@ -130,7 +130,6 @@ async def help(ctx, args=None):
                        "    whatsup                         #monbot is cranky, try not to disturb him\n"
                        "    sadboi                          #a command for sad bois\n"
                        "    ping                            #pings monbot to check if he's alive\n"
-                       "    whyyougay                       #a command for gays\n"
                        "valorant commands:\n"
                        "    addvalo [in-game name] [rank]   #adds your valorant info to bot's database. use !help addvalo for more info\n"
                        "    rank @[name]                    #gets rank. leave @[name] empty to get your own rank\n"
