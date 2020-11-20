@@ -231,6 +231,32 @@ async def sadboi(ctx):
         await asyncio.sleep(1)
     await voice.disconnect()
 
+@bot.command(pass_context=True, aliases=['gay', 'whyareyouggay', 'whygay'])
+async def whyyougay(ctx):
+    author = ctx.message.author
+    channel = author.voice.channel
+    if not channel:
+        await ctx.send("you're not in a voice channel, stoopid human")
+        return
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice and voice.is_connected():
+        voice.move_to(channel)
+    else:
+        await channel.connect()
+    source = discord.FFmpegPCMAudio(source='./effects/whyyougay.mp3')
+
+    voice = get(bot.voice_clients, guild=ctx.guild)
+
+    if voice.is_playing():
+        voice.stop()
+
+    voice.play(source, after=lambda e: print('done playing SAD VIOLIN'))
+
+    while voice.is_playing():
+        await asyncio.sleep(1)
+    await voice.disconnect()
+
+
 
 @bot.command(pass_context=True, aliases=['l', 'goaway', 'fuckoff'])
 async def leave(ctx):
