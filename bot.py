@@ -1,15 +1,18 @@
 import asyncio
 import json
 import math
+import os
 import sys
-import threading
 import traceback
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List
 
 import discord
+import instaloader
 from discord.ext import commands
 from discord.utils import get
+from instaloader import Instaloader, Profile, Post, NodeIterator
 from youtube_dl import YoutubeDL
 from youtubesearchpython import SearchVideos
 
@@ -17,6 +20,9 @@ from secret_token import TOKEN
 from valorant_ranks import Rank
 
 bot = commands.Bot(command_prefix="!", help_command=None)
+
+L = Instaloader()
+L.load_session_from_file('bubbleteaboyyy', 'session-bubbleteaboyyy')
 
 
 class Music:
@@ -48,6 +54,20 @@ class Player:
 players: Dict[int, Player] = {}
 YDL_OPTIONS = {'format': 'bestaudio', 'noplaylist': 'True'}
 FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn'}
+igfolder = Path('igpics')
+imgname = 'hello.jpg'
+
+
+def create_msg_embed(title: str, msg: str, color_name: str = 'blue'):
+    if color_name == 'blue':
+        color = 0x00ccff
+    elif color_name == 'red':
+        color = 0xdd3636
+    else:
+        color = 0x00ccff
+    embed: discord.Embed = discord.Embed(title=msg, color=color)
+    embed.set_author(name=title)
+    return embed
 
 
 @bot.event
@@ -112,27 +132,41 @@ async def on_command_error(ctx, error):
     traceback.print_exception(type(error), error, error.__traceback__, file=sys.stderr)
 
 
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+    # if message.content.startswith('hello bot'):
+    #     await message.channel.send('Hi baby!')
+    if message.guild.id not in players:
+        players[message.guild.id] = Player()
+    print(players[message.guild.id].play_state.name)
+    await bot.process_commands(message)
+
+
 @bot.command()
 async def help(ctx, args=None):
     if not args:
         await ctx.send("```"
                        "general commands:\n"
-                       "    play [song name or YT url]      #plays music on youtube. enqueues new music.\n"
-                       "    skip                            #skips the current music\n"
-                       "    pause                           #pauses the current music\n"
-                       "    stop                            #stops the current music\n"
-                       "    queue                           #lists the music currently in queue\n"
-                       "    join                            #makes monbot join the voice channel\n"
-                       "    leave                           #makes monbot leave the channel\n"
-                       "    whatsup                         #monbot is cranky, try not to disturb him\n"
-                       "    sadboi                          #a command for sad bois\n"
-                       "    ping                            #pings monbot to check if he's alive\n"
+                       "    play [song name or YT url]              #plays music on youtube. enqueues new music.\n"
+                       "    skip                                    #skips the current music\n"
+                       "    pause                                   #pauses the current music\n"
+                       "    stop                                    #stops the current music\n"
+                       "    queue                                   #lists the music currently in queue\n"
+                       "    join                                    #makes monbot join the voice channel\n"
+                       "    leave                                   #makes monbot leave the channel\n"
+                       "    whatsup                                 #monbot is cranky, try not to disturb him\n"
+                       "    sadboi                                  #a command for sad bois\n"
+                       "    ping                                    #pings monbot to check if he's alive\n"
+                       "    warp [ig username] [getpics optional]   #gets user's instagram profile pic\n"
                        "valorant commands:\n"
                        "    addvalo [in-game name] [rank]   #adds your valorant info to bot's database. use !help addvalo for more info\n"
                        "    rank @[name]                    #gets rank. leave @[name] empty to get your own rank\n"
                        "    rankup                          #increases your rank by 1\n"
                        "    derank                          #decreases your rank by 1\n"
-                       "    setname [name]                  #set your valorant name\n"
+                       "    setname [name]                  #set your valorant name\n\n"
+                       "more hidden features to be discovered...\n"
                        "```")
         return
     else:
@@ -155,6 +189,11 @@ async def help(ctx, args=None):
 
 
 @bot.command()
+async def ping(ctx):
+    await ctx.send("***PONG***  my friend,  ***PONG***")
+
+
+@bot.command()
 async def join(ctx):
     author = ctx.message.author
     channel = author.voice.channel
@@ -166,12 +205,63 @@ async def join(ctx):
         await voice.move_to(channel)
         players[ctx.guild.id].music_queue = []
         players[ctx.guild.id].play_state = PlayState.stopped
-        players[ctx.guild.id].music_playing = None
+        players[ctx.guild.id].current_music = None
     else:
         await channel.connect()
         players[ctx.guild.id].music_queue = []
         players[ctx.guild.id].play_state = PlayState.stopped
-        players[ctx.guild.id].music_playing = None
+        players[ctx.guild.id].current_music = None
+
+
+@bot.command(pass_context=True, aliases=['l', 'goaway', 'fuckoff'])
+async def leave(ctx):
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice and voice.is_connected():
+        await ctx.send("bye bye, you use me like a fucking slave and then throw me away like this huh")
+        await stop(ctx)
+        players[ctx.guild.id].music_queue = []
+        players[ctx.guild.id].play_state = PlayState.stopped
+        players[ctx.guild.id].current_music = None
+        await voice.disconnect()
+    else:
+        await ctx.send("I'm not in a voice channel, dumbass")
+
+
+@bot.command(aliases=['วาร์ป', 'ขอวาร์ป', 'วาร์ปมา', 'ขอวาร์ปหน่อย', 'ig', 'insta', 'instagram'])
+async def warp(ctx, ig_profile: str, pics=None):
+    await ctx.message.add_reaction("👌")
+    try:
+        profile = Profile.from_username(L.context, ig_profile)
+
+        embed = discord.Embed(title="", color=0x00ccff)
+        embed.set_author(name="Profile pic")
+        embed.add_field(name=ig_profile, value=f"https://www.instagram.com/{ig_profile}/", inline=True)
+        embed.set_thumbnail(url=profile.profile_pic_url)
+
+        await ctx.send(embed=embed)
+        if pics:
+            if not profile.is_private:
+                posts: NodeIterator[Post] = profile.get_posts()
+                await ctx.send(f"getting {ig_profile}'s last 3 posts...")
+                directory = './igpics/'
+                if posts.count > 0:
+                    i = 0
+                    for post in posts:
+                        if i == 3:
+                            break
+                        L.download_post(post, target='igpics')
+                        for filename in os.listdir(directory):
+                            if filename.endswith(".jpg") or filename.endswith(".png"):
+                                await ctx.send(file=discord.File(directory + filename))
+                            os.remove(directory + filename)
+                        i += 1
+            else:
+                await ctx.send(embed=create_msg_embed('Uh, oh', 'warp is private 🤫', 'red'))
+        return
+
+    except instaloader.exceptions.ProfileNotExistsException:
+        await ctx.send(embed=create_msg_embed('Uh, oh', 'warp not found 😭', 'red'))
+        return
 
 
 @bot.command(pass_context=True, aliases=['aggro', 'hello', 'sup', 'whatup'])
@@ -182,11 +272,7 @@ async def whatsup(ctx):
     if not channel:
         await ctx.send("you're not in a voice channel, stoopid human")
         return
-    voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice and voice.is_connected():
-        await voice.move_to(channel)
-    else:
-        await channel.connect()
+    await join(ctx)
     source = discord.FFmpegPCMAudio(source='./effects/fuckoff.mp3')
     voice = get(bot.voice_clients, guild=ctx.guild)
     if player.current_music and player.play_state != PlayState.stopped:
@@ -199,11 +285,6 @@ async def whatsup(ctx):
     await voice.disconnect()
 
 
-@bot.command()
-async def ping(ctx):
-    await ctx.send("***PONG***  my friend,  ***PONG***")
-
-
 @bot.command(pass_context=True, aliases=['cry', 'sob', 'nogf'])
 async def sadboi(ctx):
     author = ctx.message.author
@@ -212,11 +293,7 @@ async def sadboi(ctx):
     if not channel:
         await ctx.send("you're not in a voice channel, stoopid human")
         return
-    voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice and voice.is_connected():
-        await voice.move_to(channel)
-    else:
-        await channel.connect()
+    await join(ctx)
     source = discord.FFmpegPCMAudio(source='./effects/sadviolin.mp3')
 
     voice = get(bot.voice_clients, guild=ctx.guild)
@@ -229,31 +306,6 @@ async def sadboi(ctx):
     while voice.is_playing():
         await asyncio.sleep(1)
     await voice.disconnect()
-
-
-@bot.command(pass_context=True, aliases=['l', 'goaway', 'fuckoff'])
-async def leave(ctx):
-    voice = get(bot.voice_clients, guild=ctx.guild)
-    if voice and voice.is_connected():
-        await ctx.send("bye bye, you use me like a fucking slave and then throw me away like this huh")
-        players[ctx.guild.id].music_queue = []
-        players[ctx.guild.id].play_state = PlayState.stopped
-        players[ctx.guild.id].music_playing = None
-        await voice.disconnect()
-    else:
-        await ctx.send("I'm not in a voice channel, dumbass")
-
-
-@bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return
-    # if message.content.startswith('hello bot'):
-    #     await message.channel.send('Hi baby!')
-    if message.guild.id not in players:
-        players[message.guild.id] = Player()
-    print(players[message.guild.id].play_state.name)
-    await bot.process_commands(message)
 
 
 @bot.command()
@@ -473,19 +525,14 @@ async def play(ctx, *args):
         if not channel:
             await ctx.send("you're not in a voice channel, stoopid human")
             return
-        voice = get(bot.voice_clients, guild=ctx.guild)
-        if voice:
-            same_channel = (channel == voice.channel)
-        else:
-            same_channel = False
-        if not same_channel:
-            await join(ctx)
+        await join(ctx)
 
         # combine following args into single string separated by space
         key_in = " ".join(args[:])
 
-        # -----------no param function
         if key_in == '':
+            # no param function
+            voice = get(bot.voice_clients, guild=ctx.guild)
             play_state = player.play_state
             if play_state == PlayState.stopped:
                 if player.current_music:
@@ -496,7 +543,15 @@ async def play(ctx, *args):
                     await ctx.send("queue empty or no current music")
                     return
             elif play_state == PlayState.paused:
-                await resume(ctx)
+                if player.play_state == PlayState.paused:
+                    # resume function
+                    await ctx.message.add_reaction("▶")
+                    voice.resume()
+                    players[ctx.guild.id].play_state = PlayState.playing
+                    return
+                else:
+                    await ctx.send("music is not playing")
+                    return
                 return
             elif play_state == PlayState.playing:
                 await ctx.send("Music is already playing!")
@@ -505,27 +560,28 @@ async def play(ctx, *args):
                 await ctx.send("Error")
                 print(f"error play state: {play_state.name} unrecognized")
                 return
+        else:
+            # param function
 
-    # get url and title
-    search = SearchVideos(key_in, offset=1, mode="dict", max_results=1)
-    search_result = search.result()['search_result']
-    url = search_result[0]['link']
-    title = search_result[0]['title']
+            # get url and title
+            search = SearchVideos(key_in, offset=1, mode="dict", max_results=1)
+            search_result = search.result()['search_result']
+            url = search_result[0]['link']
+            title = search_result[0]['title']
 
-    # create Music Object
-    music = Music(url, title)
+            # create Music Object
+            music = Music(url, title)
 
-    # ---------param function
-    if player.current_music:
-        player.music_queue.append(music)
-        music.message = await ctx.send(embed=music.queue_embed)
-        print('enqueued song')
-        return
-    else:
-        player.current_music = music
-        player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
-        play_music(ctx, player.current_music)
-        return
+            if player.current_music:
+                player.music_queue.append(music)
+                music.message = await ctx.send(embed=music.queue_embed)
+                print('enqueued song')
+                return
+            else:
+                player.current_music = music
+                player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
+                play_music(ctx, player.current_music)
+                return
 
 
 def play_music(ctx, music: Music):
@@ -533,7 +589,7 @@ def play_music(ctx, music: Music):
     player = players[ctx.guild.id]
     if not voice.is_playing():
         player.play_state = PlayState.playing
-        players[ctx.guild.id].music_playing = music
+        players[ctx.guild.id].current_music = music
         with YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(music.url, download=False)
         url = info['formats'][0]['url']
@@ -552,7 +608,7 @@ async def check_queue(ctx, voice, prev_play_msg=None):
         else:
             player.play_state == PlayState.stopped
 
-            #delete ended song message
+            # delete ended song message
             if prev_play_msg:
                 await prev_play_msg.delete()
 
@@ -571,12 +627,14 @@ async def check_queue(ctx, voice, prev_play_msg=None):
 async def skip(ctx, msg=True):
     global players
     player = players[ctx.guild.id]
-    async with player.lock:
-        voice = get(bot.voice_clients, guild=ctx.guild)
-        if voice:
-            if msg:
-                await ctx.message.add_reaction("👌")
-            await stop(ctx, msg=False)
+
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice:
+        if msg:
+            await ctx.message.add_reaction("👌")
+
+        await stop(ctx, msg=False)
+        async with player.lock:
             if player.music_queue:
                 player.current_music = player.music_queue.pop(0)
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
@@ -591,9 +649,9 @@ async def skip(ctx, msg=True):
 @bot.command()
 async def pause(ctx, msg=True):
     player = players[ctx.guild.id]
-    async with player.lock:
-        voice = get(bot.voice_clients, guild=ctx.guild)
-        if voice:
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice:
+        async with player.lock:
             if player.play_state == PlayState.playing:
                 voice.pause()
                 players[ctx.guild.id].play_state = PlayState.paused
@@ -606,9 +664,9 @@ async def pause(ctx, msg=True):
 @bot.command()
 async def resume(ctx, msg=True):
     player = players[ctx.guild.id]
-    async with player.lock:
-        voice = get(bot.voice_clients, guild=ctx.guild)
-        if voice:
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice:
+        async with player.lock:
             if player.play_state == PlayState.paused:
                 if msg:
                     await ctx.message.add_reaction("▶")
@@ -623,13 +681,13 @@ async def resume(ctx, msg=True):
 @bot.command()
 async def stop(ctx, msg=True):
     player = players[ctx.guild.id]
-    async with player.lock:
-        voice = get(bot.voice_clients, guild=ctx.guild)
-        if voice:
+    voice = get(bot.voice_clients, guild=ctx.guild)
+    if voice:
+        async with player.lock:
             if player.play_state == PlayState.playing or player.play_state == PlayState.paused:
                 if msg:
                     await ctx.message.add_reaction("🛑")
-                await players[ctx.guild.id].music_playing.message.delete()
+                await players[ctx.guild.id].current_music.message.delete()
                 if voice.is_playing():
                     voice.stop()
                 players[ctx.guild.id].play_state = PlayState.stopped
