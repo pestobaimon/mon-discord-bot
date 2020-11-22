@@ -8,11 +8,11 @@
 
   <p align="center">
     This project is a python bot used for discord. It can play music from youtube with playlist functionality. It can also give you valorant ranks and play sad music when you just want to cry.
-    <a href="https://github.com/github_username/repo_name">View Demo</a>
+    <a href="https://github.com/pestobaimon/mon-discord-bot">View Demo</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Report Bug</a>
+    <a href="https://github.com/pestobaimon/mon-discord-bot/issues">Report Bug</a>
     ·
-    <a href="https://github.com/github_username/repo_name/issues">Request Feature</a>
+    <a href="https://github.com/pestobaimon/mon-discord-bot/issues">Request Feature</a>
   </p>
 </p>
 
