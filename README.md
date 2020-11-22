@@ -72,6 +72,7 @@ pip install requirements.txt
 
 <!-- USAGE EXAMPLES -->
 ## Usage
+<p>
 Bot Commands:
          !play [song name or YT url]              #plays music on youtube. enqueues new music
          !skip                                    #skips the current music
@@ -90,7 +91,7 @@ Bot Commands:
          !rankup                          #increases your rank by 1
          !derank                          #decreases your rank by 1
          !setname [name]                  #set your valorant name
-
+</p>
 
 <!-- CONTRIBUTING -->
 ## Contributing
