@@ -1,6 +1,25 @@
-#Python Discord Bot
+<br />
+<p align="center">
+  <a href="https://github.com/github_username/repo_name">
+    <img src="images/logo.png" alt="Logo" width="80" height="80">
+  </a>
 
-This project is a python bot used for discord. 
+  <h3 align="center">Python Discord Bot</h3>
+
+  <p align="center">
+    This project is a python bot used for discord. It can play music from youtube with playlist functionality. It can also give you valorant ranks and play sad music when you just want to cry.
+    <br />
+    <a href="https://github.com/github_username/repo_name"><strong>Explore the docs »</strong></a>
+    <br />
+    <br />
+    <a href="https://github.com/github_username/repo_name">View Demo</a>
+    ·
+    <a href="https://github.com/github_username/repo_name/issues">Report Bug</a>
+    ·
+    <a href="https://github.com/github_username/repo_name/issues">Request Feature</a>
+  </p>
+</p>
+
 Its functions are:
          !play [song name or YT url]              #plays music on youtube. enqueues new music
          !skip                                    #skips the current music
