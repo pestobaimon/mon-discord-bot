@@ -74,11 +74,11 @@ pip install requirements.txt
 ## Usage
 
 Bot Commands:</br>
-- !play [song name or YT url]             #plays music on youtube. enqueues new music</br>
-* !skip                                    #skips the current music</br>
-* !pause                                   #pauses the current music</br>
-* !stop                                    #stops the current music</br>
-* !queue                                   #lists the music currently in queue</br>
+  * !play [song name or YT url]             #plays music on youtube. enqueues new music</br>
+  * !skip                                    #skips the current music</br>
+  * !pause                                   #pauses the current music</br>
+  * !stop                                    #stops the current music</br>
+  * !queue                                   #lists the music currently in queue</br>
 * !join                                    #makes monbot join the voice channel</br>
 * !leave                                   #makes monbot leave the channel</br>
 * !whatsup                                 #bot is cranky, try not to disturb him</br>
