@@ -117,6 +117,6 @@ Distributed under the MIT License. See `LICENSE` for more information.
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@twitter_handle](https://twitter.com/twitter_handle) - email
+Ravipas Wangananont - wangananontr@gmail.com
 
 Project Link: [https://github.com/pestobaimon/mon-discord-bot](https://github.com/pestobaimon/mon-discord-bot)
