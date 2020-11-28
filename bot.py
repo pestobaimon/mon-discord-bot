@@ -140,7 +140,7 @@ async def on_message(message):
     #     await message.channel.send('Hi baby!')
     if message.guild.id not in players:
         players[message.guild.id] = Player()
-    print(players[message.guild.id].play_state.name)
+        print('init player in server:', message.guild.id)
     await bot.process_commands(message)
 
 
@@ -202,6 +202,8 @@ async def join(ctx):
         return
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice and voice.is_connected():
+        if voice.channel == channel:
+            return
         await voice.move_to(channel)
         players[ctx.guild.id].music_queue = []
         players[ctx.guild.id].play_state = PlayState.stopped
@@ -314,7 +316,6 @@ async def rank(ctx, name: str = None):
         player_dict = json.load(json_file)
     if name and name[0:2] == "<@" and name[-1] == ">":
         authid = name[3:-1]
-        print(name)
         if authid in player_dict:
             rank_emoji = discord.utils.get(ctx.guild.emojis, name=Rank(player_dict[authid]["rank"]).name)
             await ctx.send(
@@ -570,7 +571,6 @@ async def play(ctx, *args):
 
             # create Music Object
             music = Music(url, title)
-
             if player.current_music:
                 player.music_queue.append(music)
                 music.message = await ctx.send(embed=music.queue_embed)
@@ -578,6 +578,7 @@ async def play(ctx, *args):
                 return
             else:
                 player.current_music = music
+                print(player.current_music)
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
                 play_music(ctx, player.current_music)
                 return
@@ -588,7 +589,6 @@ def play_music(ctx, music: Music):
     player = players[ctx.guild.id]
     if not voice.is_playing():
         player.play_state = PlayState.playing
-        players[ctx.guild.id].current_music = music
         with YoutubeDL(YDL_OPTIONS) as ydl:
             info = ydl.extract_info(music.url, download=False)
         url = info['formats'][0]['url']
@@ -682,7 +682,9 @@ async def stop(ctx, msg=True):
     player = players[ctx.guild.id]
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice:
+        print("h")
         async with player.lock:
+            print('g')
             if player.play_state == PlayState.playing or player.play_state == PlayState.paused:
                 if msg:
                     await ctx.message.add_reaction("🛑")
