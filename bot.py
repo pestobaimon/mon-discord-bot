@@ -137,12 +137,6 @@ async def on_command_error(ctx, error):
 async def on_message(message):
     if message.author == bot.user:
         return
-    if message.content.startswith('!'):
-        try:
-            print(players[message.guild.id].play_state)
-            print(players[message.guild.id].current_music)
-        except:
-            pass
     if message.guild.id not in players:
         players[message.guild.id] = Player()
         print('init player in server:', message.guild.id)
@@ -608,25 +602,22 @@ async def check_queue(ctx):
     global players
     player = players[ctx.guild.id]
     async with player.lock:
-        print('check queue called', player.play_state)
         if not player.stop_call.empty():
             player.stop_call.get()
+            print('check queue done')
             return
         else:
             player.play_state = PlayState.stopped
 
             # delete ended song message
-            print('1')
             if player.music_queue:
-                print('2')
                 player.current_music = player.music_queue.pop(0)
                 await player.current_music.message.delete()
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
                 play_music(ctx, player.current_music)
-                return
             else:
                 player.current_music = None
-                return
+    print('check queue done')
 
 
 @bot.command()
@@ -644,12 +635,10 @@ async def skip(ctx, msg=True):
                 player.current_music = player.music_queue.pop(0)
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
                 play_music(ctx, player.current_music)
-                print('3', player.play_state)
-                return
             else:
                 player.current_music = None
                 await ctx.send("Music queue is empty")
-                return
+    print('skip done')
 
 
 @bot.command()
@@ -665,6 +654,7 @@ async def pause(ctx, msg=True):
                     await ctx.message.add_reaction("⏸")
             else:
                 await ctx.send("music is not playing")
+    print('pause done')
 
 
 @bot.command()
@@ -678,10 +668,9 @@ async def resume(ctx, msg=True):
                     await ctx.message.add_reaction("▶")
                 voice.resume()
                 players[ctx.guild.id].play_state = PlayState.playing
-                return
             else:
                 await ctx.send("music is not playing")
-                return
+    print('resume done')
 
 
 @bot.command()
@@ -705,7 +694,7 @@ async def stop(ctx, msg=True):
                 print(f"Error playstate: {player.play_state.name} unrecognized")
                 await ctx.send("Error")
 
-            print('stop done')
+    print('stop done')
 
 
 @bot.command(aliases=['v', 'vol'])
@@ -722,6 +711,7 @@ async def volume(ctx, vol: int):
             await ctx.send(f"current volume is {vol}")
         else:
             await ctx.send("enter a volume between 0 and 100")
+    print('volume done')
 
 
 @bot.command(aliases=['q', 'que'])
@@ -736,6 +726,7 @@ async def queue(ctx):
                 msg += music.title + "\n"
             msg = "```" + msg[:-1] + "```"
             await ctx.send(msg)
+    print('queue done')
 
 
 bot.run(TOKEN)
