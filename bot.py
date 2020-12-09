@@ -4,10 +4,10 @@ import math
 import os
 import sys
 import traceback
+import queue as q
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List
-
 import discord
 import instaloader
 from discord.ext import commands
@@ -48,6 +48,7 @@ class Player:
         self.play_state = PlayState.stopped
         self.current_music: Music = None
         self.music_queue: List[Music] = []
+        self.stop_call: q.Queue = q.Queue()
         self.lock = asyncio.Lock()
 
 
@@ -136,8 +137,12 @@ async def on_command_error(ctx, error):
 async def on_message(message):
     if message.author == bot.user:
         return
-    # if message.content.startswith('hello bot'):
-    #     await message.channel.send('Hi baby!')
+    if message.content.startswith('!'):
+        try:
+            print(players[message.guild.id].play_state)
+            print(players[message.guild.id].current_music)
+        except:
+            pass
     if message.guild.id not in players:
         players[message.guild.id] = Player()
         print('init player in server:', message.guild.id)
@@ -585,6 +590,7 @@ async def play(ctx, *args):
 
 
 def play_music(ctx, music: Music):
+    global players
     voice = get(bot.voice_clients, guild=ctx.guild)
     player = players[ctx.guild.id]
     if not voice.is_playing():
@@ -593,25 +599,26 @@ def play_music(ctx, music: Music):
             info = ydl.extract_info(music.url, download=False)
         url = info['formats'][0]['url']
         voice.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS),
-                   after=lambda e: asyncio.run_coroutine_threadsafe(check_queue(ctx, voice, music.message), bot.loop))
+                   after=lambda e: asyncio.run_coroutine_threadsafe(check_queue(ctx), bot.loop))
         voice.source = discord.PCMVolumeTransformer(voice.source, volume=1.0)
         voice.is_playing()
 
 
-async def check_queue(ctx, voice, prev_play_msg=None):
+async def check_queue(ctx):
     global players
     player = players[ctx.guild.id]
     async with player.lock:
-        if player.play_state == PlayState.stopped:
+        print('check queue called', player.play_state)
+        if not player.stop_call.empty():
+            player.stop_call.get()
             return
         else:
             player.play_state = PlayState.stopped
 
             # delete ended song message
-            if prev_play_msg:
-                await prev_play_msg.delete()
-
+            print('1')
             if player.music_queue:
+                print('2')
                 player.current_music = player.music_queue.pop(0)
                 await player.current_music.message.delete()
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
@@ -631,13 +638,13 @@ async def skip(ctx, msg=True):
     if voice:
         if msg:
             await ctx.message.add_reaction("👌")
-
         await stop(ctx, msg=False)
         async with player.lock:
             if player.music_queue:
                 player.current_music = player.music_queue.pop(0)
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
                 play_music(ctx, player.current_music)
+                print('3', player.play_state)
                 return
             else:
                 player.current_music = None
@@ -679,25 +686,26 @@ async def resume(ctx, msg=True):
 
 @bot.command()
 async def stop(ctx, msg=True):
+    global players
     player = players[ctx.guild.id]
     voice = get(bot.voice_clients, guild=ctx.guild)
     if voice:
-        print("h")
         async with player.lock:
-            print('g')
             if player.play_state == PlayState.playing or player.play_state == PlayState.paused:
                 if msg:
                     await ctx.message.add_reaction("🛑")
                 await players[ctx.guild.id].current_music.message.delete()
+                players[ctx.guild.id].play_state = PlayState.stopped
+                player.stop_call.put(True)
                 if voice.is_playing():
                     voice.stop()
-                players[ctx.guild.id].play_state = PlayState.stopped
-                return
             elif player.play_state == PlayState.stopped:
-                return
+                pass
             else:
                 print(f"Error playstate: {player.play_state.name} unrecognized")
                 await ctx.send("Error")
+
+            print('stop done')
 
 
 @bot.command(aliases=['v', 'vol'])
