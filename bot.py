@@ -270,7 +270,8 @@ async def warp(ctx, ig_profile: str, num_pics:str):
         embed.set_thumbnail(url=profile.profile_pic_url)
 
         await ctx.send(embed=embed)
-        if 0 < int(num_pics) < 11:
+        num_pics = int(num_pics)
+        if 0 < num_pics < 11:
             if not profile.is_private:
                 posts: NodeIterator[Post] = profile.get_posts()
                 await ctx.send(f"getting {ig_profile}'s best {num_pics} posts...")
