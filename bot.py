@@ -282,7 +282,7 @@ async def warp(ctx, ig_profile: str, num_pics:str):
                         if i == num_pics:
                             break
                         L.download_post(post, target='igpics')
-                        await ctx.send(f"post {i}, likes: {post.likes}")
+                        await ctx.send(f"post {i+1}, likes: {post.likes}")
                         for filename in os.listdir(directory):
                             if filename.endswith(".jpg") or filename.endswith(".png"):
                                 await ctx.send(file=discord.File(directory + filename))
