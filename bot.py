@@ -18,6 +18,8 @@ from youtubesearchpython import SearchVideos
 
 from secret_token import TOKEN
 from valorant_ranks import Rank
+from instagram_commands import InstaArgs
+from test import get_valo_rank_img
 
 bot = commands.Bot(command_prefix="!", help_command=None)
 
@@ -34,7 +36,7 @@ class Music:
         self.playing_embed = discord.Embed(title=title, url=self.url,
                                            color=0x00ccff)
         self.playing_embed.set_author(name="Now Playing")
-        self.message: discord.Message = None
+        self.message: discord.Message or None = None
 
 
 class PlayState(Enum):
@@ -46,7 +48,7 @@ class PlayState(Enum):
 class Player:
     def __init__(self):
         self.play_state = PlayState.stopped
-        self.current_music: Music = None
+        self.current_music: Music or None = None
         self.music_queue: List[Music] = []
         self.stop_call: q.Queue = q.Queue()
         self.lock = asyncio.Lock()
@@ -158,7 +160,7 @@ async def help(ctx, args=None):
                        "    whatsup                                 #monbot is cranky, try not to disturb him\n"
                        "    sadboi                                  #a command for sad bois\n"
                        "    ping                                    #pings monbot to check if he's alive\n"
-                       "    warp [ig username] [number of pics to get optional]   #gets user's instagram profile pic\n"
+                       "    warp [commands] [optional command]      #gets user's instagram profile pic. type !help warp for more info on commands\n"
                        "valorant commands:\n"
                        "    addvalo [in-game name] [rank]   #adds your valorant info to bot's database. use !help addvalo for more info\n"
                        "    rank @[name]                    #gets rank. leave @[name] empty to get your own rank\n"
@@ -168,22 +170,29 @@ async def help(ctx, args=None):
                        "more hidden features to be discovered...\n"
                        "```")
         return
+    elif args == "addvalo":
+        await ctx.send("```"
+                       "addvalo [in-game name] [rank]   #adds your valorant info to bot's database\n\n"
+                       "[in-game name] is your name in the game, duh.\n\n"
+                       "rank list:\n"
+                       "iron1,     iron2,     iron3,\n"
+                       "silver1,   silver2,   silver3,\n"
+                       "gold1,     gold2,     gold3,\n"
+                       "platinum1, platinum2, platinum3,\n"
+                       "diamond1,  diamond2,  diamond3,\n"
+                       "immortal1, immortal2, immortal3,\n"
+                       "radiant, unranked"
+                       "```")
+    elif args == "warp":
+        await ctx.send("```"
+                       "warp [commands] is the instagram power tool\n\n"
+                       "list of [commands]: \n"
+                       "similar - gets 5 similar accounts\n"
+                       "toptagged - gets top 5 users the user tagged\n"
+                       "pics [number of pics] - gets top n pics. n can be from 1 - 10\n"
+                       "```")
     else:
-        if args == "addvalo":
-            await ctx.send("```"
-                           "addvalo [in-game name] [rank]   #adds your valorant info to bot's database\n\n"
-                           "[in-game name] is your name in the game, duh.\n\n"
-                           "rank list:\n"
-                           "iron1,     iron2,     iron3,\n"
-                           "silver1,   silver2,   silver3,\n"
-                           "gold1,     gold2,     gold3,\n"
-                           "platinum1, platinum2, platinum3,\n"
-                           "diamond1,  diamond2,  diamond3,\n"
-                           "immortal1, immortal2, immortal3,\n"
-                           "radiant, unranked"
-                           "```")
-        else:
-            await ctx.send("command not found")
+        await ctx.send("help command not found")
         return
 
 
@@ -258,23 +267,67 @@ async def leave(ctx):
         await ctx.send("I'm not in a voice channel, dumbass")
 
 
+@bot.command()
+async def addvalorantemojis(ctx):
+    try:
+        for rank_name in Rank.__members__.keys():
+            await ctx.guild.create_custom_emoji(name=rank_name, image=(get_valo_rank_img(rank_name)))
+        await ctx.send("Add emojis successful!")
+    except discord.Forbidden:
+        await ctx.send("I don't have enough permissions to add emojis to this server")
+
+
+async def get_insta_profile(ctx, ig_profile: str) -> Profile or None:
+    profile = Profile.from_username(L.context, ig_profile)
+    embed = discord.Embed(title="", color=0x00ccff)
+    embed.set_author(name="Profile pic")
+    embed.add_field(name=ig_profile, value=f"https://www.instagram.com/{ig_profile}/", inline=True)
+    embed.set_thumbnail(url=profile.profile_pic_url)
+    await ctx.send(embed=embed)
+    return profile
+
+
 @bot.command(aliases=['วาร์ป', 'ขอวาร์ป', 'วาร์ปมา', 'ขอวาร์ปหน่อย', 'ig', 'insta', 'instagram'])
-async def warp(ctx, ig_profile: str, num_pics:str):
+async def warp(ctx, ig_profile: str, args='', args2=0):
     await ctx.message.add_reaction("👌")
     try:
-        profile = Profile.from_username(L.context, ig_profile)
-
-        embed = discord.Embed(title="", color=0x00ccff)
-        embed.set_author(name="Profile pic")
-        embed.add_field(name=ig_profile, value=f"https://www.instagram.com/{ig_profile}/", inline=True)
-        embed.set_thumbnail(url=profile.profile_pic_url)
-
-        await ctx.send(embed=embed)
-        num_pics = int(num_pics)
-        if 0 < num_pics < 11:
-            if not profile.is_private:
-                posts: NodeIterator[Post] = profile.get_posts()
+        profile = await get_insta_profile(ctx, ig_profile)
+        if profile.is_private:
+            await ctx.send(embed=create_msg_embed('Uh, oh', 'warp is private 🤫', 'red'))
+            if args != InstaArgs.similar_accounts.value:
+                return
+        insta_args = set(item.value for item in InstaArgs)
+        if args not in insta_args:
+            await ctx.send(
+                embed=create_msg_embed('Uh, oh', 'invalid arguments. use !help for more info on the command', 'red'))
+            return
+        elif args == InstaArgs.top_tagged.value:
+            posts: NodeIterator[Post] = profile.get_posts()
+            if posts.count > 0:
+                sorted_posts = sorted(posts, key=lambda k: k.likes, reverse=True)
+                tagged_dict = {}
+                for idx, post in enumerate(sorted_posts):
+                    for user in post.tagged_users:
+                        if user not in tagged_dict:
+                            tagged_dict[user] = 0
+                        else:
+                            tagged_dict[user] += 1
+                sorted_tags = sorted(tagged_dict.items(), key=lambda k: k[1], reverse=True)
+                for idx, tag in enumerate(sorted_tags):
+                    if idx == 5:
+                        break
+                    await ctx.send(f"top {idx + 1} tagged: {tag[0]}")
+        elif args == InstaArgs.similar_accounts.value:
+            similar_accs = []
+            similar_acc = profile.get_similar_accounts()
+            for i in range(5):
+                similar_accs.append(next(similar_acc).username)
+            await ctx.send(" similar accounts: " + ', '.join(map(str, similar_accs)))
+        elif args == InstaArgs.pics.value:
+            if 0 < int(args2) < 11:
+                num_pics = int(args2)
                 await ctx.send(f"getting {ig_profile}'s best {num_pics} posts...")
+                posts: NodeIterator[Post] = profile.get_posts()
                 directory = './igpics/'
                 if posts.count > 0:
                     i = 0
@@ -283,7 +336,7 @@ async def warp(ctx, ig_profile: str, num_pics:str):
                         if i == num_pics:
                             break
                         L.download_post(post, target='igpics')
-                        await ctx.send(f"post {i+1}, likes: {post.likes}")
+                        await ctx.send(f"post {i + 1}, likes: {post.likes}")
                         for filename in os.listdir(directory):
                             if filename.endswith(".jpg") or filename.endswith(".png"):
                                 await ctx.send(file=discord.File(directory + filename))
@@ -291,7 +344,7 @@ async def warp(ctx, ig_profile: str, num_pics:str):
                             os.remove(directory + filename)
                         i += 1
             else:
-                await ctx.send(embed=create_msg_embed('Uh, oh', 'warp is private 🤫', 'red'))
+                await ctx.send("number of pics can only be between 1 and 10")
         return
 
     except instaloader.exceptions.ProfileNotExistsException:
@@ -301,7 +354,7 @@ async def warp(ctx, ig_profile: str, num_pics:str):
 
 @bot.command(pass_context=True, aliases=['aggro', 'hello', 'sup', 'whatup'])
 async def whatsup(ctx):
-    await join(ctx)# join channel if the user is in one
+    await join(ctx)  # join channel if the user is in one
     player = players[ctx.guild.id]
     source = discord.FFmpegPCMAudio(source='./effects/fuckoff.mp3')
     voice = get(bot.voice_clients, guild=ctx.guild)
@@ -317,7 +370,7 @@ async def whatsup(ctx):
 
 @bot.command(pass_context=True, aliases=['cry', 'sob', 'nogf'])
 async def sadboi(ctx):
-    await join(ctx)# join channel if the user is in one
+    await join(ctx)  # join channel if the user is in one
 
     player = players[ctx.guild.id]
     source = discord.FFmpegPCMAudio(source='./effects/sadviolin.mp3')
@@ -545,7 +598,7 @@ async def play(ctx, *args):
     global players
     player = players[ctx.guild.id]
     async with player.lock:
-        channel = await join(ctx)# join channel if the user is in one
+        channel = await join(ctx)  # join channel if the user is in one
         if channel is None:
             return
         # combine following args into single string separated by space
@@ -558,7 +611,7 @@ async def play(ctx, *args):
             if play_state == PlayState.stopped:
                 if player.current_music:
                     player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
-                    play_music(ctx, player.current_music)
+                    await play_music(ctx, player.current_music)
                     return
                 else:
                     await ctx.send("queue empty or no current music")
@@ -600,14 +653,14 @@ async def play(ctx, *args):
                 player.current_music = music
                 print(player.current_music)
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
-                play_music(ctx, player.current_music)
+                await play_music(ctx, player.current_music)
                 return
 
 
-def play_music(ctx, music: Music):
+async def play_music(ctx, music: Music):
     player = players[ctx.guild.id]
     voice = get(bot.voice_clients, guild=ctx.guild)
-    channel = get_channel()
+    channel = await get_channel(ctx)
     if not in_same_channel(ctx, channel):
         return
 
@@ -638,7 +691,7 @@ async def check_queue(ctx):
                 player.current_music = player.music_queue.pop(0)
                 await player.current_music.message.delete()
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
-                play_music(ctx, player.current_music)
+                await play_music(ctx, player.current_music)
             else:
                 player.current_music = None
     print('check queue done')
@@ -648,7 +701,7 @@ async def check_queue(ctx):
 async def skip(ctx, msg=True):
     player = players[ctx.guild.id]
     voice = get(bot.voice_clients, guild=ctx.guild)
-    channel = get_channel()
+    channel = await get_channel(ctx)
     if not in_same_channel(ctx, channel):
         await ctx.send("I'm not in your channel, dumb ass")
 
@@ -660,7 +713,7 @@ async def skip(ctx, msg=True):
             if player.music_queue:
                 player.current_music = player.music_queue.pop(0)
                 player.current_music.message = await ctx.send(embed=player.current_music.playing_embed)
-                play_music(ctx, player.current_music)
+                await play_music(ctx, player.current_music)
             else:
                 player.current_music = None
                 await ctx.send("Music queue is empty")
@@ -671,7 +724,7 @@ async def skip(ctx, msg=True):
 async def pause(ctx, msg=True):
     player = players[ctx.guild.id]
     voice = get(bot.voice_clients, guild=ctx.guild)
-    channel = get_channel()
+    channel = get_channel(ctx)
     if not in_same_channel(ctx, channel):
         await ctx.send("I'm not in your channel, dumb ass")
 
@@ -691,8 +744,8 @@ async def pause(ctx, msg=True):
 async def resume(ctx, msg=True):
     player = players[ctx.guild.id]
     voice = get(bot.voice_clients, guild=ctx.guild)
-    channel = get_channel()
-    if not in_same_channel(ctx,channel):
+    channel = get_channel(ctx)
+    if not in_same_channel(ctx, channel):
         await ctx.send("I'm not in your channel, dumb ass")
     if voice:
         async with player.lock:
@@ -714,7 +767,7 @@ async def resume(ctx, msg=True):
 async def stop(ctx, msg=True):
     player = players[ctx.guild.id]
     voice = get(bot.voice_clients, guild=ctx.guild)
-    channel = get_channel()
+    channel = get_channel(ctx)
     if not in_same_channel(ctx, channel):
         await ctx.send("I'm not in your channel, dumb ass")
     if voice:
@@ -739,7 +792,7 @@ async def stop(ctx, msg=True):
 @bot.command(aliases=['v', 'vol'])
 async def volume(ctx, vol: int):
     voice = get(bot.voice_clients, guild=ctx.guild)
-    channel = get_channel()
+    channel = get_channel(ctx)
     if not in_same_channel(ctx, channel):
         await ctx.send("I'm not in your channel, dumb ass")
     if voice:

@@ -2,7 +2,7 @@ from enum import Enum
 
 
 class Rank(Enum):
-    unranked = 0
+    unrated = 0
     iron1 = 1
     iron2 = 2
     iron3 = 3
@@ -21,7 +21,5 @@ class Rank(Enum):
     diamond1 = 16
     diamond2 = 17
     diamond3 = 18
-    immortal1 = 19
-    immortal2 = 20
-    immortal3 = 21
-    radiant = 22
+    immortal = 19
+    radiant = 20
