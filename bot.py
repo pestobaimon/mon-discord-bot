@@ -19,7 +19,7 @@ from youtubesearchpython import SearchVideos
 from secret_token import TOKEN
 from valorant_ranks import Rank
 from instagram_commands import InstaArgs
-from test import get_valo_rank_img
+from get_valo_rank_img import get_valo_rank_img
 
 bot = commands.Bot(command_prefix="!", help_command=None)
 
