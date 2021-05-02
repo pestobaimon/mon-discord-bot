@@ -5,6 +5,7 @@ import os
 import sys
 import traceback
 import queue as q
+from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List
@@ -15,13 +16,14 @@ from discord.utils import get
 from instaloader import Instaloader, Profile, Post, NodeIterator
 from youtube_dl import YoutubeDL
 from youtubesearchpython import SearchVideos
-
+import logging
 from secret_token import TOKEN
 from valorant_ranks import Rank
 from instagram_commands import InstaArgs
 from get_valo_rank_img import get_valo_rank_img
 
 bot = commands.Bot(command_prefix="!", help_command=None)
+logging.basicConfig(filename='commands.log', filemode='a', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 L = Instaloader()
 L.load_session_from_file('bubbleteaboyyy', 'session-bubbleteaboyyy')
@@ -136,12 +138,16 @@ async def on_command_error(ctx, error):
 
 
 @bot.event
-async def on_message(message):
-    if message.author == bot.user:
+async def on_message(message: discord.Message):
+    author: discord.Member = message.author
+    if author.id == bot.user.id:
         return
+    else:
+        logging.info(f'time: {datetime.now()} user: {author.display_name} said "{message.content}"')
     if message.guild.id not in players:
         players[message.guild.id] = Player()
         print('init player in server:', message.guild.id)
+
     await bot.process_commands(message)
 
 

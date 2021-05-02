@@ -1,0 +1,32 @@
+discord.client - INFO - logging in using static token
+discord.gateway - INFO - Shard ID None has sent the IDENTIFY payload.
+discord.gateway - INFO - Shard ID None has connected to Gateway: ["gateway-prd-main-d0k7",{"micros":104747,"calls":["discord-sessions-prd-2-33",{"micros":94883,"calls":["start_session",{"micros":44110,"calls":["api-prd-main-1sq9",{"micros":40680,"calls":["get_user",{"micros":4084},"add_authorized_ip",{"micros":1539},"get_guilds",{"micros":7386},"coros_wait",{"micros":0}]}]},"guilds_connect",{"micros":6,"calls":[]},"presence_connect",{"micros":19580,"calls":[]}]}]}] (Session ID: 3f7946b4e9e28827edcd5dd100a0f288).
+root - INFO - a b c
+root - INFO - a b c
+root - INFO - a b c
+discord.client - INFO - Received signal to terminate bot and event loop.
+discord.client - INFO - Cleaning up tasks.
+discord.client - INFO - Cleaning up after 1 tasks.
+discord.client - INFO - All tasks finished cancelling.
+discord.client - INFO - Closing the event loop.
+discord.client - INFO - logging in using static token
+discord.gateway - INFO - Shard ID None has sent the IDENTIFY payload.
+discord.gateway - INFO - Shard ID None has connected to Gateway: ["gateway-prd-main-gztf",{"micros":86263,"calls":["discord-sessions-prd-2-97",{"micros":83534,"calls":["start_session",{"micros":68380,"calls":["api-prd-main-3rk2",{"micros":65551,"calls":["get_user",{"micros":2640},"add_authorized_ip",{"micros":1509},"get_guilds",{"micros":15107},"coros_wait",{"micros":0}]}]},"guilds_connect",{"micros":4,"calls":[]},"presence_connect",{"micros":13341,"calls":[]}]}]}] (Session ID: 03e8575502fbc196e0b264f45528b0cc).
+root - INFO - user: ktsmon said "!teesyt"
+root - INFO - user: ktsmon said "!hoy"
+root - INFO - user: ktsmon said "!hum"
+root - INFO - user: ktsmon said "!warp kts.mon similar"
+discord.client - INFO - Received signal to terminate bot and event loop.
+discord.client - INFO - Cleaning up tasks.
+discord.client - INFO - Cleaning up after 1 tasks.
+discord.client - INFO - All tasks finished cancelling.
+discord.client - INFO - Closing the event loop.
+discord.client - INFO - logging in using static token
+discord.gateway - INFO - Shard ID None has sent the IDENTIFY payload.
+discord.gateway - INFO - Shard ID None has connected to Gateway: ["gateway-prd-main-qmnl",{"micros":69360,"calls":["discord-sessions-prd-2-20",{"micros":66084,"calls":["start_session",{"micros":28323,"calls":["api-prd-main-jvxm",{"micros":25167,"calls":["get_user",{"micros":2678},"add_authorized_ip",{"micros":1442},"get_guilds",{"micros":4252},"coros_wait",{"micros":1}]}]},"guilds_connect",{"micros":6,"calls":[]},"presence_connect",{"micros":2,"calls":[]}]}]}] (Session ID: aa5433707be3622b5e31d58f9d27e5bc).
+root - INFO - time: 2021-05-02 13:34:08.637474 user: ktsmon said "!warp eevee_tnp pics 1"
+discord.client - INFO - Received signal to terminate bot and event loop.
+discord.client - INFO - Cleaning up tasks.
+discord.client - INFO - Cleaning up after 1 tasks.
+discord.client - INFO - All tasks finished cancelling.
+discord.client - INFO - Closing the event loop.
